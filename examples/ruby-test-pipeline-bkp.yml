@@ -1,0 +1,87 @@
+---
+
+# fly -t experiment configure -c ruby-test-pipeline.yml ruby-test-pipeline --var "private-key=abc"
+# fly w -b 1 -j rspec-test-suite -p ruby-test-pipeline
+#
+# Example for passing environment config options to jobs:
+# Passes the git ssh key to the pipeline configuration
+# fly configure -c pipelines/my-pipeline.yml --var "private-key=$(cat credentials/git_ssh_key)"
+
+
+jobs:
+- name: rspec-test-suite
+  public: true
+  serial: true
+  plan:
+  # - get: simple_rails_app
+  #   resource: simple_rails_app-resource
+  - get: sinatra-example
+    resource: sinatra-example-resource
+  # - task: ls-simple_rails_app
+  #   config:
+  #     platform: linux
+  #     image: docker:///ubuntu#14.04
+  #     inputs:
+  #     - name: simple_rails_app
+  #     run:
+  #       path: ls
+  #       args: ["-lacht", "./simple_rails_app"]
+  # - task: bundle-simple_rails_app
+  #   config:
+  #     platform: linux
+  #     image: docker:///ruby#2.2.2
+  #     inputs:
+  #     - name: simple_rails_app
+  #     run:
+  #       path: bundle
+  #       args: ["install", "--gemfile=./simple_rails_app/Gemfile"]
+  # - task: bundle-sinatra-example
+  #   config:
+  #     platform: linux
+  #     image: docker:///ruby#2.2.2
+  #     inputs:
+  #     - name: sinatra-example
+  #     run:
+  #       path: bundle
+  #       args: ["package", "--gemfile=./sinatra-example/Gemfile"]
+  # - task: ls-sinatra-example
+  #   config:
+  #     platform: linux
+  #     image: docker:///ruby#2.2.2
+  #     inputs:
+  #     - name: sinatra-example
+  #     run:
+  #       path: ls
+  #       args: ["-lacht", "./sinatra-example"]
+  #
+    - task: rspec-sinatra-example
+      config:
+        platform: linux
+        image: docker:///ruby#2.2.2
+        inputs:
+        - name: sinatra-example
+        run:
+          path: ./sinatra-example/run_rspec.sh
+
+  # - task: run-sinatra-example-spec
+  #   config:
+  #     platform: linux
+  #     image: docker:///ruby#2.2.2
+  #     inputs:
+  #     - name: sinatra-example
+  #     run:
+  #       path: rspec
+  #       args: ["./sinatra-example/spec"]
+
+
+resources:
+# - name: simple_rails_app-resource
+#   type: git
+#   source:
+#     uri: https://github.com/anynines/simple_rails_app
+- name: sinatra-example-resource
+  type: git
+  source:
+    uri: https://github.com/dudesens/sinatra-example
+    branch: master
+#    private_key: {{private-key}}

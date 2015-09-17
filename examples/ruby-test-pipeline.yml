@@ -1,0 +1,104 @@
+---
+
+# fly -t experiment configure -c ruby-test-pipeline.yml ruby-test-pipeline
+# fly w -b 1 -j rspec-test-suite-1 -p ruby-test-pipeline
+
+groups:
+- name: ruby
+  jobs:
+  - rspec-test-suite-1
+  - rspec-test-suite-2
+  - rspec-test-suite-3
+
+jobs:
+- name: rspec-test-suite-1
+  public: true
+  serial: true
+  plan:
+  - get: ruby-sinatra-example-app
+    resource: ruby-sinatra-example-app-resource
+    trigger: true
+  - get: all-2-minutes-timer
+    trigger: true
+  - aggregate:
+    - task: rspec-sinatra-example
+      config:
+        platform: linux
+        image: docker:///ruby#2.2.2
+        inputs:
+        - name: ruby-sinatra-example-app
+        run:
+          path: ruby-sinatra-example-app/run_rspec.sh
+    - task: ls-sinatra-example
+      config:
+        platform: linux
+        image: docker:///ruby#2.2.2
+        inputs:
+        - name: ruby-sinatra-example-app
+        run:
+          path: ls
+          args: [./ruby-sinatra-example-app]
+- name: rspec-test-suite-2
+  public: true
+  plan:
+  - get: ruby-sinatra-example-app
+    resource: ruby-sinatra-example-app-resource
+    trigger: true
+  - get: all-5-minutes-timer
+    trigger: true
+  - aggregate:
+    - task: rspec-sinatra-example-2.0.0
+      config:
+        platform: linux
+        image: docker:///ruby#2.0.0
+        inputs:
+        - name: ruby-sinatra-example-app
+        run:
+          path: ruby-sinatra-example-app/run_rspec.sh
+    - task: rspec-sinatra-example-2.1.7
+      config:
+        platform: linux
+        image: docker:///ruby#2.1.7
+        inputs:
+        - name: ruby-sinatra-example-app
+        run:
+          path: ruby-sinatra-example-app/run_rspec.sh
+    - task: rspec-sinatra-example-latest-ruby
+      config:
+        platform: linux
+        image: docker:///ruby#latest
+        inputs:
+        - name: ruby-sinatra-example-app
+        run:
+          path: ruby-sinatra-example-app/run_rspec.sh
+- name: rspec-test-suite-3
+  public: true
+  serial: true
+  plan:
+  - get: ruby-sinatra-example-app
+    resource: ruby-sinatra-example-app-resource
+    trigger: true
+    passed: [rspec-test-suite-1,rspec-test-suite-2]
+  - task: rspec-sinatra-example
+    config:
+      platform: linux
+      image: docker:///ruby#2.2.2
+      inputs:
+      - name: ruby-sinatra-example-app
+      run:
+        path: ruby-sinatra-example-app/run_rspec.sh
+
+resources:
+- name: ruby-sinatra-example-app-resource
+  type: git
+  source:
+    uri: https://github.com/dudesens/ruby-sinatra-example-app
+    branch: master
+- name: all-5-minutes-timer
+  type: time
+  source:
+    interval: 5m
+- name: all-2-minutes-timer
+  type: time
+  source:
+    interval: 2m

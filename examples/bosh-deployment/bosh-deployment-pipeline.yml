@@ -1,0 +1,75 @@
+---
+# fly configure bosh-deployment-pipeline -c bosh-deployment-pipeline.yml --vars-from credentials.yml
+# fly w -j job-deploy-redis-release -p bosh-deployment-pipeline
+# fly w -j job-redis-release-acceptance-tests -p bosh-deployment-pipeline
+groups:
+- name: bosh-interaction
+  jobs:
+  - job-deploy-redis-release
+  - job-redis-release-acceptance-tests
+
+jobs:
+- name: job-deploy-redis-release
+  public: true
+  serial: true
+  plan:
+  - aggregate:
+    - get: resource-bosh-stemcell
+    - get: resource-bosh-release-redis
+    - get: resource-manifest
+    - get: resource-run-errand
+  - put: resource-redis-bosh-deployment
+    params:
+      manifest: resource-manifest/redis-warden-manifest.yml
+      releases:
+        - resource-bosh-release-redis/*.tgz
+      stemcells: []
+
+# acceptance-tests
+- name: job-redis-release-acceptance-tests
+  public: true
+  serial: true
+  plan:
+  - get: resource-run-errand
+    passed: [job-deploy-redis-release]
+  - task: job-acceptance-tests
+    config:
+      inputs:
+      - name: resource-run-errand
+      platform: linux
+      image: docker:///cloudfoundry/diego-pipeline
+      run:
+        path: sh
+        args: [resource-run-errand/run_acceptance_tests.sh]
+
+resources:
+- name: resource-manifest
+  type: git
+  source:
+    uri: https://gist.github.com/0d3de2d3251ab1625faf.git # bosh-lite example new
+    # uri: https://gist.github.com/395869dfd717644becf1.git # bosh-lite example
+    # uri: https://gist.github.com/3ff87c465d483543c53d.git # AWS example
+
+- name: resource-run-errand
+  type: git
+  source:
+    uri: https://gist.github.com/0d3de2d3251ab1625faf.git # bosh-lite example new
+
+- name: resource-bosh-stemcell
+  type: bosh-io-stemcell
+  source:
+    name: {{bosh-stemcell-name}}
+
+- name: resource-bosh-release-redis
+  type: bosh-io-release
+  source:
+    repository: cloudfoundry-community/redis-boshrelease
+
+- name: resource-redis-bosh-deployment
+  type: bosh-deployment
+  source:
+    target: {{bosh-target}}
+    username: {{bosh-username}}
+    password: {{bosh-password}}
+    deployment: redis-warden # from the manifest.yml in resource-manifest
+    ignore_ssl: true

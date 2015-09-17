@@ -1,0 +1,53 @@
+---
+
+# fly -t experiment configure -c bosh-pipeline.yml bosh-pipeline --paused=false
+jobs:
+- name: job-bosh-stemcell-release
+  public: true
+  serial: true
+  plan:
+  - aggregate:
+    - get: bosh-stemcell-openstack
+      params:
+        tarball: true
+    - get: bosh-release-redis
+      params:
+        tarball: true
+  - task: ls
+    config:
+      platform: linux
+      image: docker:///ubuntu#14.04
+      inputs:
+      - name: bosh-stemcell-openstack
+      - name: bosh-release-redis
+      run:
+        path: ls
+        args: ["-opR", "."]
+  - task: files-bosh-stemcell-openstack
+    config:
+      platform: linux
+      image: docker:///ubuntu#14.04
+      inputs:
+      - name: bosh-stemcell-openstack
+      run:
+        path: cat
+        args: ["bosh-stemcell-openstack/url", "bosh-stemcell-openstack/version"]
+  - task: files-bosh-release-redis
+    config:
+      platform: linux
+      image: docker:///ubuntu#14.04
+      inputs:
+      - name: bosh-release-redis
+      run:
+        path: cat
+        args: ["bosh-release-redis/url", "bosh-release-redis/version"]
+
+resources:
+- name: bosh-stemcell-openstack
+  type: bosh-io-stemcell
+  source:
+    name: bosh-openstack-kvm-ubuntu-trusty-go_agent
+- name: bosh-release-redis
+  type: bosh-io-release
+  source:
+    repository: cloudfoundry-community/redis-boshrelease
