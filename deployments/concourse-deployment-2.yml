@@ -1,0 +1,131 @@
+---
+name: concourse-staging
+
+director_uuid: 7c2f2dab-572c-4234-8b1c-6b7baeb3d818
+
+releases:
+  - name: concourse
+    version: latest
+  - name: garden-linux
+    version: latest
+
+jobs:
+  - name: web
+    instances: 1
+    resource_pool: small
+    networks:
+      - default:
+        - dns
+        - gateway
+        name: default
+      - name: floating
+        static_ips: &web-ips [78.109.62.174] # replace
+    persistent_disk_pool: 1GB # for consul
+    templates:
+      - {release: concourse, name: consul-agent}
+      - {release: concourse, name: atc}
+      - {release: concourse, name: tsa}
+    properties:
+      atc:
+        development_mode: true
+        postgresql:
+          database: &atc-db atc
+          role: &atc-role
+            name: atc
+            password: dummy-postgres-password
+      consul:
+        agent:
+          mode: server
+
+  - name: db
+    instances: 1
+    resource_pool: small
+    networks: [{name: default}]
+    persistent_disk_pool: 20GB
+    templates:
+      - {release: concourse, name: consul-agent}
+      - {release: concourse, name: postgresql}
+    properties:
+      postgresql:
+        databases: [{name: *atc-db}]
+        roles: [*atc-role]
+
+      consul:
+        agent:
+          servers: {lan: *web-ips}
+
+  - name: worker
+    instances: 1
+    resource_pool: medium
+    networks: [{name: default}]
+    templates:
+      - {release: concourse, name: consul-agent}
+      - {release: garden-linux, name: garden}
+      - {release: concourse, name: groundcrew}
+    properties:
+      garden:
+        # cannot enforce quotas in bosh-lite
+        disk_quota_enabled: false
+
+        listen_network: tcp
+        listen_address: 0.0.0.0:7777
+
+        allow_host_access: true
+
+      consul:
+        agent:
+          servers: {lan: *web-ips}
+
+networks:
+- name: floating
+  type: vip
+  cloud_properties: {}
+- name: default
+  cloud_properties:
+    net_id: f00f560e-4a58-4d02-b8db-562d6332caf6
+    security_groups:
+    - cf-private
+    - default
+  type: dynamic
+
+disk_pools:
+- name: 20GB
+  disk_size: 20480
+  cloud_properties:
+    type: EMC-ThinVolume
+
+- name: 1GB
+  disk_size: 1024
+  cloud_properties:
+    type: EMC-ThinVolume
+
+resource_pools:
+- name: small
+  network: default
+  stemcell:
+    name: bosh-openstack-kvm-ubuntu-trusty-go_agent
+    version: latest
+  cloud_properties:
+    instance_type: m1.small
+
+- name: medium
+  network: default
+  stemcell:
+    name: bosh-openstack-kvm-ubuntu-trusty-go_agent
+    version: latest
+  cloud_properties:
+    instance_type: m1.medium
+
+compilation:
+  workers: 2
+  network: default
+  reuse_compilation_vms: true
+  cloud_properties:
+    instance_type: m1.medium
+
+update:
+  canaries: 1
+  max_in_flight: 1
+  serial: false
+  canary_watch_time: 1000-60000
+  update_watch_time: 1000-60000
